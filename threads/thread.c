@@ -643,7 +643,7 @@ schedule (void) {
 	thread_ticks = 0;
 
 #ifdef USERPROG
-	/* Activate the new address space. */
+	/* Activate the new address space. 새 주소공간 활성화 */
 	process_activate (next);
 #endif
 

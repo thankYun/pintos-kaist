@@ -15,43 +15,59 @@
 #include "userprog/process.h"
 #endif
 
-/* Random value for struct thread's `magic' member.
+/*
+   Random value for struct thread's `magic' member.
    Used to detect stack overflow.  See the big comment at the top
-   of thread.h for details. */
+   of thread.h for details. 
+   
+   struct thread 스레드를 나타내는 자료 구조, magic 멤퍼는 스택 오버플로우를 감지하는 보조 용도로 사용.
+   스택 오버플로우가 발생하면 magic 멤버의 값이 변경되어 스택의 무결성을 확인할 수 있다.
+   */
 #define THREAD_MAGIC 0xcd6abf4b
 
 /* Random value for basic thread
    Do not modify this value. */
 #define THREAD_BASIC 0xd42df210
 
-/* List of processes in THREAD_READY state, that is, processes
-   that are ready to run but not actually running. */
+/* 준비된 스레드의 목록, 실행 준비가 되었지만 현재 실행되고 있지 않은 스레드의 목록 */
 static struct list ready_list;
 
-/* Idle thread. */
+/* Idle thread. (유휴 스레드) */
 static struct thread *idle_thread;
 
-/* Initial thread, the thread running init.c:main(). */
+/* Initial thread, the thread running init.c:main().
+   초기 스레드, 이 스레드는 init.c:main()에 있습니다. */
 static struct thread *initial_thread;
 
 /* Lock used by allocate_tid(). */
 static struct lock tid_lock;
 
-/* Thread destruction requests */
+/* Thread destruction requests
+	스레드 파괴 요청 */
 static struct list destruction_req;
 
-/* Statistics. */
-static long long idle_ticks;    /* # of timer ticks spent idle. */
-static long long kernel_ticks;  /* # of timer ticks in kernel threads. */
-static long long user_ticks;    /* # of timer ticks in user programs. */
+/* Statistics. 통계 자료 */
+static long long idle_ticks;    /* # of timer ticks spent idle. 유휴 상태로 소모된 타이머 틱 */
+static long long kernel_ticks;  /* # of timer ticks in kernel threads. 커널 스레드의 타이머 틱*/
+static long long user_ticks;    /* # of timer ticks in user programs. 유저 프로그램의 타이머 틱*/
 
-/* Scheduling. */
-#define TIME_SLICE 4            /* # of timer ticks to give each thread. */
-static unsigned thread_ticks;   /* # of timer ticks since last yield. */
+/* Scheduling. 스케쥴링*/
+#define TIME_SLICE 4            /* # of timer ticks to give each thread. 스레드에 대한 타이머 틱 수 정의 */
+static unsigned thread_ticks;   /* # of timer ticks since last yield. 마지막 양보 이후 타이머 틱 수 정의 */
 
 /* If false (default), use round-robin scheduler.
    If true, use multi-level feedback queue scheduler.
-   Controlled by kernel command-line option "-o mlfqs". */
+   Controlled by kernel command-line option "-o mlfqs".
+
+   FALSE인 경우 round-robin 스케쥴러 방식 사용
+   TRUE인 경우 다단계 피드백 큐 스케쥴러 방식 사용
+   이 설정은 커널의 명령줄 옵션 "-o mlfqs"로 제어됨
+   Round-robin 스케줄러: 모든 스레드가 동일한 우선순위를 가지고 CPU 시간을 순환하며 할당하는 방식
+   각 스레드는 동일한 실행 시간을 가지고 순서대로 CPU를 사용
+   multi-level feedback queue scheduler: 스레드를 다양한 우선순위로 분류하고 우선순위에 따라 다른 스케쥴링
+   적용, 스레드의 실행 시간, 우선순위, CPU 사용량 등의 요소를 기반으로 스레드를 적절한 우선순위 레벨로 이동
+   시스템 성능을 향상시킬 수 있음
+   -o mlfqs커널 명령줄 옵션으로 다단계 피드백 큐 스케쥴러를 활성화하거나 비활성화 할 수 있다.*/
 bool thread_mlfqs;
 
 static void kernel_thread (thread_func *, void *aux);
@@ -63,14 +79,19 @@ static void do_schedule(int status);
 static void schedule (void);
 static tid_t allocate_tid (void);
 
-/* Returns true if T appears to point to a valid thread. */
+/* Returns true if T appears to point to a valid thread. 
+T가 유효한 스레드를 가리키는 것 같으면 true 반환 */
 #define is_thread(t) ((t) != NULL && (t)->magic == THREAD_MAGIC)
 
-/* Returns the running thread.
+/** Returns the running thread.
+ * 실행 중인 스레드 반환 과정
  * Read the CPU's stack pointer `rsp', and then round that
+ * CPU의 스택 포인터인 'rsp'읽고 반올림
  * down to the start of a page.  Since `struct thread' is
  * always at the beginning of a page and the stack pointer is
- * somewhere in the middle, this locates the curent thread. */
+ * somewhere in the middle, this locates the curent thread. 
+ * 페이지 시작점까지 CPU의 스택 포인터를 내려 현재 스레드를 찾는다.
+ * */
 #define running_thread() ((struct thread *) (pg_round_down (rrsp ())))
 
 

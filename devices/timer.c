@@ -91,7 +91,8 @@ timer_ticks (void) {
 }
 
 /* Returns the number of timer ticks elapsed since THEN, which should be a value once returned by timer_ticks(). 
-이전에 timer_ticks()로 반환된 값인 THEN 이후로 경과한 타이머 틱 수를 반환합니다.*/
+THEN 이후 경과한 타이머 틱의 수를 반환합니다. 이 때, THEN은 이전에 timer_ticks()로 반환된 값이어야 합니다.
+(timer_ticks - then)*/
 int64_t
 timer_elapsed (int64_t then) {
 	return timer_ticks () - then;
@@ -104,7 +105,7 @@ timer_sleep (int64_t ticks) {
 	int64_t start = timer_ticks ();
 
 	ASSERT (intr_get_level () == INTR_ON);
-	while (timer_elapsed (start) < ticks)
+	while (timer_elapsed (start) < ticks)			
 		thread_yield ();
 }
 
@@ -173,6 +174,7 @@ too_many_loops (unsigned loops) {
    differently in different places the results would be difficult
    to predict. 
    간단한 루프를 LOOPS 횟수만큼 반복하여 짧은 지연을 구현합니다.
+
    코드 정렬은 타이밍에 큰 영향을 미치므로 NO_INLINE으로 표시되어
    이 함수가 서로 다른 위치에서 다르게 인라인되면 결과가 예측하기 어려워집니다. */
 
@@ -201,7 +203,9 @@ real_time_sleep (int64_t num, int32_t denom) {
 		   processes. 
 		   적어도 하나의 완전한 타이머 틱을 기다리고 있습니다. 다른 프로세스에 CPU를 양보하기 위해
 	   timer_sleep()를 사용합니다.*/
+
 		timer_sleep (ticks);
+
 	} else {
 		/* Otherwise, use a busy-wait loop for more accurate
 		   sub-tick timing.  We scale the numerator and denominator

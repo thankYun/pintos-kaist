@@ -93,28 +93,29 @@ typedef int tid_t;
    		따라서 커널 함수에서는 큰 구조체나 배열을 정적 로컬 변수로 할당해서는 안됩니다.
    		대신 malloc()이나 palloc_get_page()를 사용하여 동적 할당을 해야 합니다.
 
-  The first symptom of either of these problems will probably be
-  an assertion failure in thread_current(), which checks that
-  the `magic' member of the running thread's `struct thread' is
-  set to THREAD_MAGIC.  Stack overflow will normally change this
-  value, triggering the assertion. 
-  이러한 문제 중 하나의 첫 번째 증상은 보통 thread_current()에서 단언문 실패가 발생할 것입니다.
-  이 단언문은 실행 중인 스레드의 struct thread의 magic 멤버가 THREAD_MAGIC로 설정되었는지 확인합니다.
-  스택 오버플로우는 일반적으로 이 값을 변경하여 단언문을 트리거합니다.*/
+	The first symptom of either of these problems will probably be
+	an assertion failure in thread_current(), which checks that
+	the `magic' member of the running thread's `struct thread' is
+	set to THREAD_MAGIC.  Stack overflow will normally change this
+	value, triggering the assertion. 
+	이러한 문제 중 하나의 첫 번째 증상은 보통 thread_current()에서 단언문 실패가 발생할 것입니다.
+	이 단언문은 실행 중인 스레드의 struct thread의 magic 멤버가 THREAD_MAGIC로 설정되었는지 확인합니다.
+	스택 오버플로우는 일반적으로 이 값을 변경하여 단언문을 트리거합니다.*/
 
-/* The `elem' member has a dual purpose.  It can be an element in
-the run queue (thread.c), or it can be an element in a
-semaphore wait list (synch.c).  It can be used these two ways
-only because they are mutually exclusive: only a thread in the
-ready state is on the run queue, whereas only a thread in the
-blocked state is on a semaphore wait list.
+	/* The `elem' member has a dual purpose.  It can be an element in
+	the run queue (thread.c), or it can be an element in a
+	semaphore wait list (synch.c).  It can be used these two ways
+	only because they are mutually exclusive: only a thread in the
+	ready state is on the run queue, whereas only a thread in the
+	blocked state is on a semaphore wait list.
+	
+	elem 멤버는 이중 목적을 가지고 있습니다.
+	이는 실행 대기열(run queue)에서의 요소이거나 
+	세마포어 대기 목록(semaphore wait list)에서의 요소가 될 수 있습니다. 
+	이 두 가지 방식으로만 사용될 수 있는 이유는 서로 배타적인(mutually exclusive)이기 때문입니다:
+	실행 대기 상태인 스레드만 실행 대기열에 있으며, 차단(blocked) 상태인 스레드만 세마포어 대기 목록에 있습니다.
+	*/
 
-elem 멤버는 이중 목적을 가지고 있습니다.
- 이는 실행 대기열(run queue)에서의 요소이거나 
- 세마포어 대기 목록(semaphore wait list)에서의 요소가 될 수 있습니다. 
- 이 두 가지 방식으로만 사용될 수 있는 이유는 서로 배타적인(mutually exclusive)이기 때문입니다:
-  실행 대기 상태인 스레드만 실행 대기열에 있으며, 차단(blocked) 상태인 스레드만 세마포어 대기 목록에 있습니다.
-*/
 struct thread {
 	/* Owned by thread.c.  thread.c에서 소유합니다*/
 	tid_t tid;                          /* Thread identifier.스레드 식별자(thread identifier).  */
@@ -125,7 +126,7 @@ struct thread {
 	/* Shared between thread.c and synch.c. 
 	thread.c와 synch.c 사이에서 공유됩니다.*/
 	struct list_elem elem;              /* List element. 목록 요소*/
-
+	int64_t wakeup_tick;				//!프로젝트.1 일어나야 할 tick
 #ifdef USERPROG
 	/* Owned by userprog/process.c. userprog/process.c에서 소유합니다. */
 	uint64_t *pml4;                     /* Page map level 4 */
@@ -151,6 +152,13 @@ extern bool thread_mlfqs;
 
 void thread_init (void);
 void thread_start (void);
+
+void thread_sleep(int64_t ticks);							//!실행 중인 스레드를 슬립으로 재운다.
+void thread_awake(int64_t ticks);							//!슬립 큐의 스레드를 깨운다.
+void update_next_tick_to_awake(int64_t ticks);				//!최소 틱을 가진 스레드 저장
+int64_t get_next_tick_to_awake(void);						//!thread.c의 next_tick_to_awake 반환
+
+
 
 void thread_tick (void);
 void thread_print_stats (void);

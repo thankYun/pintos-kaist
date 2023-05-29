@@ -14,7 +14,6 @@
 #ifdef USERPROG
 #include "userprog/process.h"
 #endif
-#define MIN(a, b) (((a) < (b)) ? (a) : (b))
 
 /*
    Random value for struct thread's `magic' member.
@@ -33,7 +32,7 @@
 /* 준비된 스레드의 목록, 실행 준비가 되었지만 현재 실행되고 있지 않은 스레드의 목록 */
 static struct list ready_list;
 
-/* Idle thread. 유휴 스레드 */
+/* Idle thread. (유휴 스레드) */
 static struct thread *idle_thread;
 
 /* Initial thread, the thread running init.c:main().
@@ -51,12 +50,6 @@ static struct list destruction_req;
 static long long idle_ticks;    /* # of timer ticks spent idle. 유휴 상태로 소모된 타이머 틱 */
 static long long kernel_ticks;  /* # of timer ticks in kernel threads. 커널 스레드의 타이머 틱*/
 static long long user_ticks;    /* # of timer ticks in user programs. 유저 프로그램의 타이머 틱*/
-
-//! 프로젝트 1
-static struct list sleep_list;				//!스레드 블록 상태의 스레드를 관리하기 위한 리스트 자료구조
-static int64_t next_tick_to_awake;			//!슬립 리스트에서 대기 중인 스레드들의 wakeup_tick값 중 최솟값을 저장
-static long long next_tick_to_awake;
-
 
 /* Scheduling. 스케쥴링*/
 #define TIME_SLICE 4            /* # of timer ticks to give each thread. 스레드에 대한 타이머 틱 수 정의 */
@@ -100,7 +93,6 @@ T가 유효한 스레드를 가리키는 것 같으면 true 반환 */
  * 페이지 시작점까지 CPU의 스택 포인터를 내려 현재 스레드를 찾는다.
  * */
 #define running_thread() ((struct thread *) (pg_round_down (rrsp ())))
-
 
 // Global descriptor table for the thread_start.	스레드 스타트에 대한 전역 설명자 테이블이다.
 // Because the gdt will be setup after the thread_init, we should setup temporal gdt first.
@@ -147,17 +139,14 @@ thread_init (void) {
 	lock_init (&tid_lock);
 	list_init (&ready_list);
 	list_init (&destruction_req);
-//! 프로젝트.1
-	list_init (&sleep_list);				//!슬립 큐 & next tick to awake 초기화 코드 추가
-	// next_tick_to_awake = INT64_MAX;			//!최솟값 찾아가야 하니 초기화할 때는 정수 최댓값
 
 	/* Set up a thread structure for the running thread. 실행 중인 스레드에 대한 구조를 설정*/
 	initial_thread = running_thread ();
 	init_thread (initial_thread, "main", PRI_DEFAULT);
 	initial_thread->status = THREAD_RUNNING;
 	initial_thread->tid = allocate_tid ();
-
 }
+
 
 /* Starts preemptive thread scheduling by enabling interrupts.
    Also creates the idle thread.
@@ -365,7 +354,7 @@ thread_yield (void) {
 	struct thread *curr = thread_current ();
 	enum intr_level old_level;
 
-	ASSERT (!intr_context ()); //외부 인터럽트 프로세스 수행 중이면 TRUE, 아니면 FALSE
+	ASSERT (!intr_context ());
 
 	old_level = intr_disable ();
 	if (curr != idle_thread)
@@ -373,28 +362,6 @@ thread_yield (void) {
 	do_schedule (THREAD_READY);
 	intr_set_level (old_level);
 }
-//! 프로젝트.1 > yield 기반으로 제작
-void thread_sleep(int64_t ticks){
-	struct thread *curr =thread_current();
-	enum intr_level old_level;
-
-	//! 스레드를 blocked 상태로 만들고 슬립 큐에 삽입해서 대기
-	ASSERT (!intr_context()); //!외부 인터럽트 프로세스 수행 중이면 TRUE, 아니면 FALSE
-
-	old_level =intr_disable();
-
-	curr -> wakeup_tick = ticks;	//! 현재 스레드를 깨우는 tick은 인자로 받은 tick만큼의 시간이 지나고서 작동
-	
-	//! 스레드 슬립 큐에 삽입
-	if (curr != idle_thread){
-		list_push_back (&sleep_list, &curr ->elem);
-	}
-	
-	update_next_tick_to_awake(ticks); //! 다음 깨워야 할 스레드가 바뀔 가능성이 있으니 최소 틱 저장
-	do_schedule(THREAD_BLOCKED);	//! context switch: blocked(sleep) 상태로 바꿔줌
-	intr_set_level (old_level);	
-}
-
 
 /* Sets the current thread's priority to NEW_PRIORITY.
 현재 스레드의 우선 순위를 NEW_PRIORITY로 설정합니다 */
@@ -714,39 +681,4 @@ allocate_tid (void) {
 	lock_release (&tid_lock);
 
 	return tid;
-}
-
-void thread_awake(int64_t ticks) {
-	/* Sleep queue에서 깨워야 할 thread를 찾아서 wakeup */
-	next_tick_to_awake = INT64_MAX;
-	struct list_elem *e = list_begin(&sleep_list); // sleep list의 첫번째 요소
-	struct thread *t;
-
-	/*  sleep_list의 스레드를 에서 wakeup_tick이 ticks보다 작으면 깨우기*/
-	for (e; e != list_end(&sleep_list);)
-	{
-		t = list_entry(e, struct thread, elem); // sleep list에 들어있는 엔트리 중에서 계속 돌아
-		if (t->wakeup_tick <= ticks) // wakeup_tick보다 지금 시간(ticks)이 크다면
-		// 이때 지금 시간(ticks)은 thread_awake()를 실행하기 직전의 next_tick_to_awake.
-		{
-			e = list_remove(&t->elem); // 현재 t는 sleep_list에 연결된 스레드.
-			thread_unblock(t); // 리스트에서 지우고 난 다음 unblock 상태로 변경!
-			// 여기서는 list_remove에서 이미 다음 리스트로 연결해주니 list_next가 필요 X.
-		}
-		/* 위에서 thread가 일어났다면 sleep_list가 변했으니 next_tick_to_awake가 바뀜.
-		현재 ticks에서 일어나지 않은 스레드 중 가장 작은 wakeup_tick이 next_tick_to_awake. 얘를 갱신. 
-		즉, 아직 깰 시간이 안 된 애들 중 가장 먼저 일어나야 하는 애를 next_tick_to_awake!*/
-		else {
-			update_next_tick_to_awake(t->wakeup_tick);
-			e= list_next(e); //위에서는 바로 리스트에서 지우니까 for문 돌고 나면 알아서 갱신되었으나 여기는 list_next로 갱신.
-		}
-	}
-}
-
-void update_next_tick_to_awake(int64_t ticks) {
-	next_tick_to_awake = MIN(next_tick_to_awake,ticks);
-}
-
-int64_t get_next_tick_to_awake(void){
-	return next_tick_to_awake;
 }

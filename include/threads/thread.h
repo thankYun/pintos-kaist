@@ -122,11 +122,28 @@ struct thread {
 	enum thread_status status;          /* Thread state. 스레드 상태(thread state).*/
 	char name[16];                      /* Name (for debugging purposes).이름 (디버깅 용도) */
 	int priority;                       /* Priority. 우선순위. */
+	//!프로젝트 1.2 priority donation
+
+	//! 스레드 우선순위는 donation 에 의해 변경될 수 있음 따라서 초기 우선순위값을 기록해두어야 함
+	int init_priority;	
+
+ /**
+  * !해당 스레드가 대기하고 있는 lock 자료구조 주소 저장	
+  * !스레드가 원하는 lock를 이미 다른 스레드가 점유하고 있으면 lock 주소를 저장한다
+ */
+	struct lock *wait_on_lock;			
+
+	//!multiple donation 위해 사용, B에 의해 A가 변경됐다면 A의 list donation B를 기억시켜둔다.
+	struct list donations;				
+	//!multiple donation 위해 사용, B는 A의 스레드 도네이션 목록에 자신의 이름일 새겨놓는다.
+	struct list_elem donation_elem;		
+
 
 	/* Shared between thread.c and synch.c. 
 	thread.c와 synch.c 사이에서 공유됩니다.*/
 	struct list_elem elem;              /* List element. 목록 요소*/
 	int64_t wakeup_tick;				//!프로젝트.1 일어나야 할 tick
+
 #ifdef USERPROG
 	/* Owned by userprog/process.c. userprog/process.c에서 소유합니다. */
 	uint64_t *pml4;                     /* Page map level 4 */
@@ -153,12 +170,23 @@ extern bool thread_mlfqs;
 void thread_init (void);
 void thread_start (void);
 
+//! 프로젝트 1.1
+
 void thread_sleep(int64_t ticks);							//!실행 중인 스레드를 슬립으로 재운다.
 void thread_awake(int64_t ticks);							//!슬립 큐의 스레드를 깨운다.
 void update_next_tick_to_awake(int64_t ticks);				//!최소 틱을 가진 스레드 저장
 int64_t get_next_tick_to_awake(void);						//!thread.c의 next_tick_to_awake 반환
 
+//! 프로젝트 1.2
+void test_max_priority(void); //! 현재 수행중인 스레드와 가장 높은 우선순위 스레드를 비교하여 스케줄링
+bool cmp_priority (const struct list_elem *a,const struct list_elem *b, void *aux UNUSED); //! 인자로 주어진 스레드들의 우선순위 비교
+bool cmp_sem_priority(const struct list_elem *a,const struct list_elem *b, void *aux UNUSED);
 
+//! 1.2 donate
+
+void donate_priority (void);
+void remove_with_lock (struct lock *);
+void refresh_priority (void);
 
 void thread_tick (void);
 void thread_print_stats (void);
@@ -183,6 +211,9 @@ int thread_get_nice (void);
 void thread_set_nice (int);
 int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
+bool
+thread_compare_donate_priority (const struct list_elem *l, 
+				const struct list_elem *s, void *aux UNUSED);
 
 void do_iret (struct intr_frame *tf);
 

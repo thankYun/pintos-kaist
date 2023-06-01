@@ -40,6 +40,9 @@ static struct lock tid_lock;
 /* Thread destruction requests */
 static struct list destruction_req;
 
+/* Project 1 : Thread sleep list */
+static struct list sleep_list;
+
 /* Statistics. */
 static long long idle_ticks;    /* # of timer ticks spent idle. */
 static long long kernel_ticks;  /* # of timer ticks in kernel threads. */
@@ -109,6 +112,8 @@ thread_init (void) {
 	lock_init (&tid_lock);
 	list_init (&ready_list);
 	list_init (&destruction_req);
+	/* Project 1 : init sleep list */
+	list_init (&sleep_list);
 
 	/* Set up a thread structure for the running thread. */
 	initial_thread = running_thread ();
@@ -206,6 +211,7 @@ thread_create (const char *name, int priority,
 
 	/* Add to run queue. */
 	thread_unblock (t);
+	preemption();
 
 	return tid;
 }
@@ -240,7 +246,12 @@ thread_unblock (struct thread *t) {
 
 	old_level = intr_disable ();
 	ASSERT (t->status == THREAD_BLOCKED);
-	list_push_back (&ready_list, &t->elem);
+	/* default */
+	// list_push_back (&ready_list, &t->elem);
+
+	/* Project 1 */
+	list_insert_ordered(&ready_list, &t->elem, cmp_priority, NULL);
+
 	t->status = THREAD_READY;
 	intr_set_level (old_level);
 }
@@ -256,7 +267,7 @@ thread_name (void) {
    See the big comment at the top of thread.h for details. */
 struct thread *
 thread_current (void) {
-	struct thread *t = running_thread ();
+	struct thread *t = running_thread();
 
 	/* Make sure T is really a thread.
 	   If either of these assertions fire, then your thread may
@@ -302,8 +313,14 @@ thread_yield (void) {
 	ASSERT (!intr_context ());
 
 	old_level = intr_disable ();
+	/* default*/
+	// if (curr != idle_thread)
+	// 	list_push_back (&ready_list, &curr->elem);
+
+	/* Project 1 */
 	if (curr != idle_thread)
-		list_push_back (&ready_list, &curr->elem);
+		list_insert_ordered(&ready_list, &curr->elem, cmp_priority, NULL);
+
 	do_schedule (THREAD_READY);
 	intr_set_level (old_level);
 }
@@ -311,7 +328,10 @@ thread_yield (void) {
 /* Sets the current thread's priority to NEW_PRIORITY. */
 void
 thread_set_priority (int new_priority) {
-	thread_current ()->priority = new_priority;
+	thread_current ()->init_priority = new_priority;
+	/* Project 1 */
+	update_priority ();
+	preemption();
 }
 
 /* Returns the current thread's priority. */
@@ -409,6 +429,13 @@ init_thread (struct thread *t, const char *name, int priority) {
 	t->tf.rsp = (uint64_t) t + PGSIZE - sizeof (void *);
 	t->priority = priority;
 	t->magic = THREAD_MAGIC;
+
+	/* Project 1 */
+	t->wakeup_ticks = 0;
+	t->init_priority = priority;
+  t->wait_on_lock = NULL;
+  list_init(&(t->donators));
+
 }
 
 /* Chooses and returns the next thread to be scheduled.  Should
@@ -587,4 +614,119 @@ allocate_tid (void) {
 	lock_release (&tid_lock);
 
 	return tid;
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////////
+//																					 my code																						 //
+///////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+/*
+Project 1 : cmp_wakeup_ticks
+Compare the wakeup ticks in sleep_list
+*/
+bool cmp_wakeup_ticks(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED)
+{
+	return list_entry(a, struct thread, elem)->wakeup_ticks < list_entry(b, struct thread, elem)->wakeup_ticks;
+}
+
+
+/*
+Project 1 : cmp_priority
+Comparing thread's priority
+*/
+bool 
+cmp_priority(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED)
+{
+	return list_entry(a, struct thread, elem)->priority > list_entry(b,struct thread, elem)->priority;
+}
+
+
+/* 
+Project 1 : thread_sleep
+Update wakeup_ticks
+Change thread status to THREAD_BLOCKED
+Insert to sleep_list in ascending order
+*/
+void 
+thread_sleep(int64_t ticks){
+	struct thread *curr = thread_current();
+	enum intr_level old_level = intr_disable();
+	curr->wakeup_ticks = ticks;
+	list_insert_ordered(&sleep_list, &curr->elem, cmp_wakeup_ticks, NULL);
+	thread_block();
+	intr_set_level(old_level);
+}
+
+/* 
+Project 1 : thread_wakeup
+Delete wakeup thread in sleep_list and unblock
+*/
+void 
+thread_wakeup(int64_t ticks){
+	enum intr_level old_level;
+	old_level = intr_disable();
+	struct list_elem *curr_elem = list_begin(&sleep_list);
+
+	while (curr_elem != list_end(&sleep_list))
+	{
+			struct thread *curr_thread = list_entry(curr_elem, struct thread, elem);
+			if (curr_thread->wakeup_ticks <= ticks)
+			{
+					curr_elem = list_remove(curr_elem); 
+					thread_unblock(curr_thread);
+					preemption();
+			}
+			else
+					break;
+	}
+	intr_set_level(old_level);
+}
+
+/* 
+Project 1 : preemption
+Change running thread if the priority of current thread is less than ready list elements
+*/
+void preemption()
+{
+	if (thread_current() == idle_thread || list_empty(&ready_list)) return;
+	if (thread_current()->priority < list_entry(list_front(&ready_list), struct thread, elem)->priority) 
+			thread_yield();
+}
+
+void 
+priority_donation(void)
+{
+    struct thread *cur = thread_current(); 
+    struct thread *holder;
+    int priority = cur->priority;
+
+		while(cur->wait_on_lock){
+				holder = cur->wait_on_lock->holder;
+        holder->priority = priority;
+        cur = holder;
+		}
+}
+
+void
+remove_donators (struct lock *lock){
+  struct list_elem *e;
+  struct thread *cur = thread_current ();
+
+  for (e = list_begin (&cur->donators); e != list_end (&cur->donators); e = list_next (e)){
+    struct thread *t = list_entry (e, struct thread, donators_elem);
+    if (t->wait_on_lock == lock)
+      list_remove (&t->donators_elem);
+  }
+}
+
+void
+update_priority (void){
+  struct thread *cur = thread_current ();
+
+  cur->priority = cur->init_priority;
+  
+  if (!list_empty (&cur->donators))
+		cur->priority = list_entry (list_front (&cur->donators), struct thread, donators_elem)->priority;
+  
 }

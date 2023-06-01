@@ -381,6 +381,7 @@ thread_yield (void) {
 	do_schedule (THREAD_READY);		//context switch 수행, 진행중인 스레드를 ready로
 	intr_set_level (old_level);		//인자로 전달된 인터럽트 상태로 인터럽트를 성정하고 이전 인터럽트 상태를 변환한다
 }
+
 //! 프로젝트1.1 > yield 기반으로 제작
 void thread_sleep(int64_t ticks){
 	struct thread *curr =thread_current();

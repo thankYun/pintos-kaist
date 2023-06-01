@@ -150,7 +150,7 @@ sema_up (struct semaphore *sema) {
 
 	ASSERT (sema != NULL);
 
-	old_level = intr_disable ();
+	old_level = intr_disable ();			//현재 인터럽트 비활성, 이전 인터럽트 반환하여 old_level에 입력
 	if (!list_empty (&sema->waiters)){
 		//! 프로젝트 1.2
 		list_sort(&sema->waiters, &cmp_priority, NULL);					//!waiterlist의 스레드 우선순위 변경을 고려해 우선순위 기반으로 정령
@@ -158,10 +158,9 @@ sema_up (struct semaphore *sema) {
 		thread_unblock (list_entry (list_pop_front (&sema->waiters), struct thread, elem));
 	}
 	sema->value++;
-	//! 프로젝트 1.2
-	test_max_priority();												//!선점 기능 사용
+	test_max_priority();												//!레디 리스트의 가장 앞에 있는(우선순위가 높은) 스레드와 비교해 양보한다.
 
-	intr_set_level (old_level);
+	intr_set_level (old_level);		//이전 인터럽트에서 지정한 대로 활성화, 혹은 비활성화
 }
 
 static void sema_test_helper (void *sema_);
@@ -395,7 +394,7 @@ cond_wait (struct condition *cond, struct lock *lock) {
 	sema_init (&waiter.semaphore, 0);
 	//! 프로젝트 1.2
 	// list_push_back (&cond->waiters, &waiter.elem);
-	list_insert_ordered(&cond->waiters,&waiter.elem,&cmp_sem_priority,NULL);	//!우선순위 기반 줄세우기
+	list_insert_ordered(&cond->waiters,&waiter.elem,&cmp_sem_priority,NULL);	//!우선순위 기반 삽입
 
 	lock_release (lock);
 	sema_down (&waiter.semaphore);

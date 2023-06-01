@@ -9,7 +9,6 @@
 #include "vm/vm.h"
 #endif
 
-
 /* States in a thread's life cycle. */
 enum thread_status {
 	THREAD_RUNNING,     /* Running thread. */
@@ -92,6 +91,14 @@ struct thread {
 	char name[16];                      /* Name (for debugging purposes). */
 	int priority;                       /* Priority. */
 
+	/* Project 1 */
+	int64_t wakeup_ticks;
+
+	int init_priority;
+	struct lock *wait_on_lock;
+	struct list donators;
+	struct list_elem donators_elem;
+
 	/* Shared between thread.c and synch.c. */
 	struct list_elem elem;              /* List element. */
 
@@ -142,5 +149,15 @@ int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
 
 void do_iret (struct intr_frame *tf);
+
+/* Project 1 */
+bool cmp_wakeup_ticks(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED);
+bool cmp_priority(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED);
+void thread_sleep(int64_t ticks);
+void thread_wakeup(int64_t ticks);
+void preemption(void);
+void priority_donation(void);
+void remove_donators (struct lock *lock);
+void update_priority (void);
 
 #endif /* threads/thread.h */

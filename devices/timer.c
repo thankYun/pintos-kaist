@@ -93,13 +93,13 @@ timer_sleep (int64_t ticks) {
 	int64_t start = timer_ticks ();
 
 	ASSERT (intr_get_level () == INTR_ON);
-
-	// default
-	// while (timer_elapsed (start) < ticks)
+	// while (timer_elapsed (start) < ticks){
 	// 	thread_yield ();
-	
-	/* Project 1 : Execute thread_sleep() when ticks is positive */
-	if(timer_elapsed (start) < ticks) thread_sleep(start+ticks);
+	// }
+	if(timer_elapsed(start) < ticks)
+	{
+		thread_sleep(start + ticks);
+	}
 }
 
 /* Suspends execution for approximately MS milliseconds. */
@@ -125,13 +125,12 @@ void
 timer_print_stats (void) {
 	printf ("Timer: %"PRId64" ticks\n", timer_ticks ());
 }
-
+
 /* Timer interrupt handler. */
 static void
 timer_interrupt (struct intr_frame *args UNUSED) {
 	ticks++;
 	thread_tick ();
-	/* Project 1 */
 	thread_wakeup(ticks);
 }
 

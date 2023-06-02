@@ -9,6 +9,7 @@
 #include "vm/vm.h"
 #endif
 
+
 /* States in a thread's life cycle. */
 enum thread_status {
 	THREAD_RUNNING,     /* Running thread. */
@@ -90,18 +91,14 @@ struct thread {
 	enum thread_status status;          /* Thread state. */
 	char name[16];                      /* Name (for debugging purposes). */
 	int priority;                       /* Priority. */
-
-	/* Project 1 */
-	int64_t wakeup_ticks;
-
-	int init_priority;
-	struct lock *wait_on_lock;
-	struct list donators;
-	struct list_elem donators_elem;
-
+	int init_priority;					//thread_set_priority로 갖게 된 우선순위 저장
 	/* Shared between thread.c and synch.c. */
 	struct list_elem elem;              /* List element. */
+	struct lock *wait_on_lock;			//스레드가 요청했지만 다른 스레드가 점유하고 있어서 획득하지 못하고 기다리고 있는 lock
+	struct list donations;				//스레드가 점유하고 있는 lock을 요청하면서 priority를 기부해준 스레드들을 저장
+	struct list_elem donation_elem;	//스레드가 다른 스레드가 점유하고 있는 lock을 요청했을 때, 다른 스레드에게 priority를 기부하면서 해당 스레드의 donations에 들어갈 때 사용도는 elem
 
+	int64_t wakeup_tick;
 #ifdef USERPROG
 	/* Owned by userprog/process.c. */
 	uint64_t *pml4;                     /* Page map level 4 */
@@ -150,14 +147,14 @@ int thread_get_load_avg (void);
 
 void do_iret (struct intr_frame *tf);
 
-/* Project 1 */
-bool cmp_wakeup_ticks(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED);
-bool cmp_priority(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED);
-void thread_sleep(int64_t ticks);
-void thread_wakeup(int64_t ticks);
-void preemption(void);
-void priority_donation(void);
-void remove_donators (struct lock *lock);
-void update_priority (void);
+bool sleep_less(const struct list_elem *a,const struct list_elem *b, void *aux);
+bool cmp_priority(const struct list_elem *a,const struct list_elem *b,void *aux);
+bool cmp_sema_priority(const struct list_elem *a, const struct list_elem *b, void *aux);
+bool cmp_donation_priority(const struct list_elem *a, const struct list_elem *b, void *aux);
 
+void thread_wakeup(int64_t tick);
+void preempt_priority(void);
+void donate_priority(void);
+void remove_donor(struct lock *lock);
+void update_priority_for_donations(void);
 #endif /* threads/thread.h */
